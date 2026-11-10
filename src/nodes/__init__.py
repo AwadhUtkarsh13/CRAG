@@ -7,6 +7,7 @@ from src.nodes.hallucination_check import (
     GroundednessGrade,
     check_hallucination,
     finalize,
+    not_found,
 )
 from src.nodes.retrieve import rerank, retrieve
 from src.nodes.transform_query import transform_query
@@ -20,6 +21,7 @@ __all__ = [
     "finalize",
     "generate",
     "grade_documents",
+    "not_found",
     "rerank",
     "retrieve",
     "transform_query",

@@ -10,7 +10,10 @@ CRAG is a private document assistant. You upload your documents, ask questions i
 
 - **Create an account** with your email and password. Your email is confirmed with a 6-digit code.
 - **Upload documents** in PDF, TXT or Markdown, up to 20 MB each. Your library is private to your account.
-- **Ask questions** in everyday language and watch the answer appear as it's written.
+- **Choose the documents for each chat.** Pick one or several before your first question, and change the selection at any time.
+- **Ask questions** in everyday language, including tricky ones and follow-ups, and watch the answer appear as it's written.
+- **Get an honest "not found".** If the selected documents don't contain the answer, CRAG says so instead of guessing.
+- **Turn on web search when you want more.** Web search is off by default. Switch it on, or click **Search the web for this** on a "not found" answer, and CRAG will look online to fill the gaps, with your documents still coming first.
 - **See the sources** for every answer, numbered and linked to the passage or web page they came from.
 - **Ask follow-up questions.** CRAG remembers the conversation, and all your chats are saved for later.
 - **Keep a profile** with your name, phone number, date of birth, gender and photo.
@@ -20,12 +23,13 @@ CRAG is a private document assistant. You upload your documents, ask questions i
 
 When you ask a question, CRAG:
 
-1. **Searches your documents.** It combines keyword matching with meaning-based search, so it finds the right passages even when the wording differs.
-2. **Picks the best passages.** A ranking model keeps only the few passages that really matter.
-3. **Checks they're relevant.** An AI reviewer reads each passage and discards anything that doesn't help answer the question.
-4. **Looks further when needed.** If your documents don't cover the question, it searches the web for trusted information.
-5. **Writes the answer** using only those sources, with a citation for every fact.
-6. **Double-checks the answer.** A second review makes sure every statement is backed by the sources and that the question is actually answered. If not, CRAG tries again, and if it still can't confirm an answer, it tells you so instead of guessing.
+1. **Understands follow-ups.** A question like "did he play badminton?" is turned into a complete question using the conversation, keeping names exactly as they appear.
+2. **Searches the selected documents.** It combines keyword matching with meaning-based search, so it finds the right passages even when the wording differs.
+3. **Picks the best passages.** A ranking model keeps only the few passages that really matter.
+4. **Checks they're relevant.** An AI reviewer reads each passage, knowing which document it comes from (for example, that a line in a resume describes its owner), and discards anything that doesn't help.
+5. **Looks further only if you allow it.** When web search is on and your documents don't cover the question, it searches the web, ignoring pages about different people or organizations with similar names. When web search is off, it tells you the answer wasn't found.
+6. **Writes the answer** in plain language using only those sources, with a citation for every fact.
+7. **Double-checks the answer.** A second review makes sure every statement is backed by the sources and that the question is actually answered. If not, CRAG tries again, and if it still can't confirm an answer, it tells you so instead of guessing.
 
 All of this happens in the background. You only see the answer, its sources, and whether it was confirmed.
 
@@ -115,8 +119,10 @@ Your browser opens **http://localhost:8000**. The first start takes a little lon
 1. **Create an account.** Enter your email and a password on the sign-in page. If the email is new, CRAG takes you to sign-up to add your name and phone number.
 2. **Confirm your email.** Enter the 6-digit code from the email. Check your spam folder if you don't see it within a minute.
 3. **Add documents.** Open **My documents** and drag files in, or click to choose them.
-4. **Ask a question.** Go back to the chat, type your question, and press Enter. Click a number in the answer to see its source.
-5. **Update your profile.** Open **Profile** to add a photo, your date of birth and gender, or to change your password.
+4. **Start a chat.** Click **New chat** and tick the documents you want to ask about. You can change them later from the **Documents** button at the top of the chat.
+5. **Ask a question.** Type it and press Enter. Click a number in the answer to see its source.
+6. **Need more than your documents?** Turn on **Web search** at the top of the chat, or click **Search the web for this** when CRAG says the answer wasn't found.
+7. **Update your profile.** Open **Profile** to add a photo, your date of birth and gender, or to change your password.
 
 An answer marked **"Checked against the sources"** has been verified. **"Not fully confirmed"** means you should review the listed sources yourself.
 

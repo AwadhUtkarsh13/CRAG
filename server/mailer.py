@@ -107,7 +107,7 @@ def main() -> None:
         raise SystemExit("Email isn't set up yet. Fill in the SMTP_ values in .env first.")
     to = sys.argv[1]
     text = "Your CRAG email settings work. Verification codes and password resets will be delivered."
-    html = f"<p style=\"font-family:Arial,Helvetica,sans-serif;font-size:15px\">{text}</p>"
+    html = f'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px">{text}</p>'
     try:
         send_email(to, "CRAG email is set up", text, html)
     except MailError as exc:

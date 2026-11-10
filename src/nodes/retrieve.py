@@ -25,7 +25,11 @@ def _copy(doc: Document) -> Document:
 def retrieve(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Run hybrid retrieval for the question over the owner's documents."""
     question = state["question"]
-    docs = get_index().hybrid_search(question, owner=state["owner"])
+    index = get_index()
+    docs = index.hybrid_search(question, owner=state["owner"], doc_ids=state.get("document_ids") or None)
+    for doc in docs:
+        if doc.metadata.get("doc_id"):
+            doc.metadata["doc_heading"] = index.document_heading(doc.metadata["doc_id"])[1]
     return {
         "retrieved_documents": docs,
         "documents": [_copy(d) for d in docs],

@@ -82,6 +82,7 @@ class HybridIndex:
             collection_metadata={"hnsw:space": "cosine"},
         )
         self._sparse: dict[str, tuple[BM25Okapi | None, list[Document]]] = {}
+        self._headings: dict[str, tuple[str, str]] = {}
 
     def count(self, owner: str | None = None) -> int:
         """Number of chunks stored, optionally for one owner."""
@@ -126,11 +127,28 @@ class HybridIndex:
             chunk.metadata.update({"owner": owner, "doc_id": doc_id, "chunk_id": f"{doc_id}-{idx:04d}"})
             chunk.metadata = _clean_metadata(chunk.metadata)
         with self._lock:
+            self._headings.pop(doc_id, None)
             self.store.delete(where={"doc_id": doc_id})
             if chunks:
                 self.store.add_documents(chunks, ids=[c.metadata["chunk_id"] for c in chunks])
             self._invalidate(owner)
         return len(chunks)
+
+    def document_heading(self, doc_id: str) -> tuple[str, str]:
+        """``(source name, opening text)`` of a document, used to keep chunks tied to their document."""
+        cached = self._headings.get(doc_id)
+        if cached is not None:
+            return cached
+        data = self.store.get(
+            where={"$and": [{"doc_id": doc_id}, {"chunk_index": 0}]}, include=["documents", "metadatas"], limit=1
+        )
+        if not data["ids"]:
+            return ("", "")
+        text = " ".join((data["documents"][0] or "").split())
+        heading = text[:180].rstrip() + ("..." if len(text) > 180 else "")
+        entry = ((data["metadatas"][0] or {}).get("source", ""), heading)
+        self._headings[doc_id] = entry
+        return entry
 
     def delete_document(self, doc_id: str, owner: str) -> None:
         """Remove every chunk of one document."""
@@ -144,26 +162,38 @@ class HybridIndex:
             self.store.delete(where={"owner": owner})
             self._invalidate(owner)
 
-    def dense_search(self, query: str, k: int | None = None, *, owner: str) -> list[Document]:
-        """Vector similarity search. Adds ``dense_score`` (cosine similarity)."""
+    def _where(self, owner: str, doc_ids: list[str] | None) -> dict:
+        if doc_ids:
+            return {"$and": [{"owner": owner}, {"doc_id": {"$in": list(doc_ids)}}]}
+        return {"owner": owner}
+
+    def dense_search(
+        self, query: str, k: int | None = None, *, owner: str, doc_ids: list[str] | None = None
+    ) -> list[Document]:
+        """Vector similarity search, optionally limited to ``doc_ids``. Adds ``dense_score``."""
         k = k or self._settings.dense_k
-        if self.count(owner) == 0:
+        where = self._where(owner, doc_ids)
+        if not self.store.get(where=where, include=[], limit=1)["ids"]:
             return []
-        results = self.store.similarity_search_with_relevance_scores(query, k=k, filter={"owner": owner})
+        results = self.store.similarity_search_with_relevance_scores(query, k=k, filter=where)
         docs = []
         for doc, score in results:
             doc.metadata["dense_score"] = round(float(score), 4)
             docs.append(doc)
         return docs
 
-    def sparse_search(self, query: str, k: int | None = None, *, owner: str) -> list[Document]:
-        """BM25 keyword search. Adds ``bm25_score``; zero-score hits are dropped."""
+    def sparse_search(
+        self, query: str, k: int | None = None, *, owner: str, doc_ids: list[str] | None = None
+    ) -> list[Document]:
+        """BM25 keyword search, optionally limited to ``doc_ids``. Zero-score hits are dropped."""
         k = k or self._settings.sparse_k
         bm25, corpus = self._sparse_index(owner)
         if bm25 is None:
             return []
+        allowed = set(doc_ids) if doc_ids else None
         scores = bm25.get_scores(tokenize(query))
-        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+        candidates = [i for i in range(len(scores)) if allowed is None or corpus[i].metadata.get("doc_id") in allowed]
+        ranked = sorted(candidates, key=lambda i: scores[i], reverse=True)[:k]
         docs = []
         for i in ranked:
             if scores[i] <= 0:
@@ -177,13 +207,19 @@ class HybridIndex:
             )
         return docs
 
-    def hybrid_search(self, query: str, k: int | None = None, *, owner: str) -> list[Document]:
+    def hybrid_search(
+        self, query: str, k: int | None = None, *, owner: str, doc_ids: list[str] | None = None
+    ) -> list[Document]:
         """Fuse dense and sparse rankings with RRF: ``score = sum(1 / (rrf_k + rank))``."""
         k = k or self._settings.fused_k
         rrf_k = self._settings.rrf_k
         fused: dict[str, Document] = {}
         scores: dict[str, float] = {}
-        for ranking in (self.dense_search(query, owner=owner), self.sparse_search(query, owner=owner)):
+        rankings = (
+            self.dense_search(query, owner=owner, doc_ids=doc_ids),
+            self.sparse_search(query, owner=owner, doc_ids=doc_ids),
+        )
+        for ranking in rankings:
             for rank, doc in enumerate(ranking, start=1):
                 key = doc.metadata.get("chunk_id") or doc.page_content[:200]
                 if key in fused:

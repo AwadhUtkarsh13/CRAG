@@ -96,6 +96,8 @@ class Conversation(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(120))
+    document_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    web_search: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -114,6 +116,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     sources_json: Mapped[str] = mapped_column(Text, default="[]")
     verified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
@@ -146,7 +149,11 @@ def init_db(url: str | None = None) -> None:
 
 def _add_missing_columns(engine: Engine) -> None:
     """Add columns introduced after a database was first created (SQLite has no auto-migration)."""
-    added = {"users": {"email_verified_at": "DATETIME"}}
+    added = {
+        "users": {"email_verified_at": "DATETIME"},
+        "conversations": {"document_ids_json": "TEXT DEFAULT '[]'", "web_search": "BOOLEAN DEFAULT 0"},
+        "messages": {"outcome": "VARCHAR(20)"},
+    }
     with engine.begin() as conn:
         for table, columns in added.items():
             existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}

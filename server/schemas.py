@@ -181,11 +181,19 @@ class DocumentOut(BaseModel):
 class ConversationOut(BaseModel):
     id: str
     title: str
+    document_ids: list[str]
+    web_search: bool
     updated_at: datetime
 
     @classmethod
     def of(cls, conv: Conversation) -> ConversationOut:
-        return cls(id=conv.id, title=conv.title, updated_at=conv.updated_at)
+        return cls(
+            id=conv.id,
+            title=conv.title,
+            document_ids=json.loads(conv.document_ids_json or "[]"),
+            web_search=bool(conv.web_search),
+            updated_at=conv.updated_at,
+        )
 
 
 class Source(BaseModel):
@@ -202,6 +210,7 @@ class MessageOut(BaseModel):
     content: str
     sources: list[Source]
     verified: bool | None
+    outcome: str | None
     created_at: datetime
 
     @classmethod
@@ -212,6 +221,7 @@ class MessageOut(BaseModel):
             content=msg.content,
             sources=[Source(**s) for s in json.loads(msg.sources_json or "[]")],
             verified=msg.verified,
+            outcome=msg.outcome,
             created_at=msg.created_at,
         )
 
@@ -219,6 +229,8 @@ class MessageOut(BaseModel):
 class ChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     conversation_id: str | None = None
+    document_ids: list[str] = Field(default_factory=list, max_length=200)
+    web_search: bool = False
 
     @field_validator("question")
     @classmethod

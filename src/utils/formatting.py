@@ -28,8 +28,21 @@ def format_context(docs: list[Document]) -> str:
         return "(no context available)"
     blocks = []
     for i, doc in enumerate(docs, start=1):
-        blocks.append(f"[{i}] Source: {source_label(doc)}\n{doc.page_content.strip()}")
+        kind = "web" if doc.metadata.get("origin") == "web" else "document"
+        url = f" - {doc.metadata['url']}" if kind == "web" and doc.metadata.get("url") else ""
+        heading = doc.metadata.get("doc_heading")
+        opening = f'\nThis document begins: "{heading}"' if kind == "document" and heading else ""
+        blocks.append(f"[{i}] Source ({kind}): {source_label(doc)}{url}{opening}\n{doc.page_content.strip()}")
     return "\n\n".join(blocks)
+
+
+def chunk_for_grading(doc: Document) -> str:
+    """A chunk with its document name and opening line, so graders know whose document it is."""
+    heading = doc.metadata.get("doc_heading")
+    header = f"From: {source_label(doc)}"
+    if heading:
+        header += f'\nThis document begins: "{heading}"'
+    return f"{header}\n\n{doc.page_content.strip()}"
 
 
 def extract_citations(answer: str, docs: list[Document]) -> list[dict[str, Any]]:
@@ -63,6 +76,21 @@ def extract_citations(answer: str, docs: list[Document]) -> list[dict[str, Any]]
 def today() -> str:
     """Today's date (ISO format) for time-aware prompts."""
     return date.today().isoformat()
+
+
+def fallback_citations(docs: list[Document]) -> list[dict[str, Any]]:
+    """Sources for an answer that forgot its [n] markers: the passages it was written from."""
+    return [
+        {
+            "index": i,
+            "source": source_label(doc),
+            "origin": doc.metadata.get("origin", "local"),
+            "url": doc.metadata.get("url"),
+            "snippet": doc.page_content.strip()[:300],
+            "spans": [],
+        }
+        for i, doc in enumerate(docs, start=1)
+    ]
 
 
 def preview(text: str, limit: int = 160) -> str:

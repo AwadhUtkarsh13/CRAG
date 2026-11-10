@@ -33,6 +33,8 @@ class AgentState(TypedDict, total=False):
     Attributes:
         question: The user query (never mutated).
         owner: Whose document library to search.
+        document_ids: Documents selected for this chat (all of the owner's when empty).
+        web_search_enabled: Whether the user allowed the web fallback for this question.
         rewritten_question: Query optimised for web / vector retrieval.
         retrieved_documents: Raw hybrid-retrieval candidates (kept for inspection).
         documents: Working context set; reranked, filtered and possibly
@@ -42,11 +44,14 @@ class AgentState(TypedDict, total=False):
         web_search_needed: Whether the corrective web fallback should run.
         retry_count: Number of failed verification rounds so far.
         verification: Result of the hallucination / answer-relevance checks.
+        outcome: ``answered``, ``not_found`` or ``unverified`` once the run ends.
         evaluation_trace: Append-only audit log (one entry per node execution).
     """
 
     question: str
     owner: str
+    document_ids: list[str]
+    web_search_enabled: bool
     rewritten_question: str
     retrieved_documents: list[Document]
     documents: list[Document]
@@ -55,14 +60,19 @@ class AgentState(TypedDict, total=False):
     web_search_needed: bool
     retry_count: int
     verification: Verification
+    outcome: str
     evaluation_trace: Annotated[list[TraceEvent], operator.add]
 
 
-def initial_state(question: str, owner: str) -> AgentState:
-    """Build a fresh state for ``question`` scoped to ``owner``'s documents."""
+def initial_state(
+    question: str, owner: str, document_ids: list[str] | None = None, web_search: bool = False
+) -> AgentState:
+    """Build a fresh state for ``question`` scoped to the selected documents of ``owner``."""
     return AgentState(
         question=question,
         owner=owner,
+        document_ids=list(document_ids or []),
+        web_search_enabled=web_search,
         rewritten_question="",
         retrieved_documents=[],
         documents=[],

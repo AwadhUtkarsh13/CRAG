@@ -12,7 +12,7 @@ from config.settings import get_settings
 from src import llm as llm_factory
 from src.prompts import GRADE_DOCUMENT_PROMPT
 from src.state import AgentState
-from src.utils.formatting import doc_summary
+from src.utils.formatting import chunk_for_grading, doc_summary
 from src.utils.tracing import traced_node
 
 
@@ -42,7 +42,7 @@ def grade_documents(state: AgentState, config: RunnableConfig) -> dict[str, Any]
     grades: list[BinaryDocumentGrade] = []
     if docs:
         chain = GRADE_DOCUMENT_PROMPT | llm_factory.structured_model(BinaryDocumentGrade)
-        grades = chain.batch([{"question": question, "document": d.page_content} for d in docs], config=config)
+        grades = chain.batch([{"question": question, "document": chunk_for_grading(d)} for d in docs], config=config)
 
     graded: list[Document] = []
     for doc, grade in zip(docs, grades, strict=True):

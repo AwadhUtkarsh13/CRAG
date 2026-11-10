@@ -88,7 +88,6 @@ def upload_document(
     return DocumentOut.of(_store_and_index(db, user, filename, data))
 
 
-
 @router.delete("/{doc_id}", status_code=204)
 def delete_document(doc_id: str, user: User = Depends(verified_user), db: Session = Depends(get_db)) -> Response:
     record = db.get(DocumentRecord, doc_id)

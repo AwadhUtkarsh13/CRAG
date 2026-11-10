@@ -86,7 +86,12 @@ def create_app() -> FastAPI:
     def health() -> dict[str, Any]:
         from server.mailer import delivery_mode
 
-        return {"ready": readiness.ready, "error": readiness.error, "email": delivery_mode()}
+        return {
+            "ready": readiness.ready,
+            "error": readiness.error,
+            "email": delivery_mode(),
+            "web_search": get_settings().web_search_enabled,
+        }
 
     @app.api_route("/api/{_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
     def api_not_found(_path: str) -> None:

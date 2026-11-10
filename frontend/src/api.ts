@@ -23,6 +23,8 @@ export interface DocumentItem {
 export interface ConversationItem {
   id: string;
   title: string;
+  document_ids: string[];
+  web_search: boolean;
   updated_at: string;
 }
 
@@ -34,21 +36,32 @@ export interface Source {
   excerpt: string;
 }
 
+export type Outcome = "answered" | "not_found" | "unverified" | "chat";
+
 export interface ChatMessage {
   id: number | string;
   role: "user" | "assistant";
   content: string;
   sources: Source[];
   verified: boolean | null;
+  outcome?: Outcome | null;
   created_at: string;
 }
 
 export type ChatEvent =
-  | { type: "conversation"; id: string; title: string }
+  | { type: "conversation"; id: string; title: string; document_ids: string[]; web_search: boolean }
   | { type: "status"; text: string }
   | { type: "token"; text: string }
   | { type: "reset" }
-  | { type: "done"; answer: string; sources: Source[]; verified: boolean; message_id: number }
+  | {
+      type: "done";
+      answer: string;
+      sources: Source[];
+      verified: boolean | null;
+      outcome: Outcome;
+      web_used: boolean;
+      message_id: number;
+    }
   | { type: "error"; message: string };
 
 export class ApiError extends Error {
@@ -138,7 +151,8 @@ function upload<T>(path: string, file: File, onProgress?: (fraction: number) => 
 }
 
 export const api = {
-  health: () => request<{ ready: boolean; error: string | null; email: "smtp" | "console" }>("/api/health"),
+  health: () =>
+    request<{ ready: boolean; error: string | null; email: "smtp" | "console"; web_search: boolean }>("/api/health"),
 
   checkEmail: (email: string) => request<{ registered: boolean }>("/api/auth/check-email", { method: "POST", json: { email } }),
   login: (email: string, password: string) =>
@@ -175,7 +189,7 @@ export const api = {
 };
 
 export async function streamChat(
-  body: { question: string; conversation_id: string | null },
+  body: { question: string; conversation_id: string | null; document_ids: string[]; web_search: boolean },
   onEvent: (event: ChatEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {

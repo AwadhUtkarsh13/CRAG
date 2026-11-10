@@ -25,17 +25,14 @@ def transform_query(state: AgentState, config: RunnableConfig) -> dict[str, Any]
             if not verification.get("grounded", True)
             else verification.get("answer_reasoning", "")
         )
+    notes = ""
+    if state.get("rewritten_question"):
+        notes += f"\nPrevious search query (find something different): {state['rewritten_question']}"
+    if feedback:
+        notes += f"\nWhy the previous answer was rejected: {feedback}"
     chain = REWRITE_PROMPT | llm_factory.chat_model() | StrOutputParser()
     rewritten = (
-        chain.invoke(
-            {
-                "question": state["question"],
-                "previous": state.get("rewritten_question", ""),
-                "feedback": feedback,
-                "today": today(),
-            },
-            config=config,
-        )
+        chain.invoke({"question": state["question"], "notes": notes, "today": today()}, config=config)
         .strip()
         .strip('"')
         .strip()

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, streamChat, type ChatEvent, type ChatMessage } from "../api";
 import { useLibrary } from "./Library";
 
@@ -16,8 +16,12 @@ interface ChatSessionState {
   loading: boolean;
   loadError: string | null;
   streaming: boolean;
+  selectedDocs: string[];
+  webSearch: boolean;
+  setSelectedDocs: (ids: string[]) => void;
+  setWebSearch: (on: boolean) => void;
   open: (id: string | null) => void;
-  send: (question: string, onCreated?: (id: string) => void) => void;
+  send: (question: string, options?: { webSearch?: boolean; onCreated?: (id: string) => void }) => void;
   stop: () => void;
 }
 
@@ -26,15 +30,35 @@ let tempCounter = 0;
 const tempId = () => `tmp-${++tempCounter}`;
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const { touchConversation } = useLibrary();
+  const { conversations, documents, touchConversation } = useLibrary();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  const [webSearch, setWebSearch] = useState(false);
   const activeRef = useRef<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const loadSeq = useRef(0);
+  const settingsFor = useRef<string | null>(null);
+
+  // Restore a saved chat's document selection and web search setting once its details are known.
+  useEffect(() => {
+    if (!activeId || settingsFor.current === activeId || !conversations) return;
+    const conv = conversations.find((c) => c.id === activeId);
+    if (!conv) return;
+    settingsFor.current = activeId;
+    setSelectedDocs(conv.document_ids);
+    setWebSearch(conv.web_search);
+  }, [activeId, conversations]);
+
+  // Drop documents that were removed from the library.
+  useEffect(() => {
+    if (!documents) return;
+    const existing = new Set(documents.map((d) => d.id));
+    setSelectedDocs((ids) => (ids.every((id) => existing.has(id)) ? ids : ids.filter((id) => existing.has(id))));
+  }, [documents]);
 
   const open = useCallback((id: string | null) => {
     if (id === activeRef.current && (id !== null || loadSeq.current > 0)) return;
@@ -43,6 +67,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setLoadError(null);
     const seq = ++loadSeq.current;
     if (id === null) {
+      settingsFor.current = null;
+      setSelectedDocs([]);
+      setWebSearch(false);
       setMessages([]);
       setLoading(false);
       return;
@@ -56,9 +83,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       .finally(() => seq === loadSeq.current && setLoading(false));
   }, []);
 
+  const selectedRef = useRef(selectedDocs);
+  selectedRef.current = selectedDocs;
+  const webRef = useRef(webSearch);
+  webRef.current = webSearch;
+
   const send = useCallback(
-    (question: string, onCreated?: (id: string) => void) => {
+    (question: string, options: { webSearch?: boolean; onCreated?: (id: string) => void } = {}) => {
       if (controllerRef.current) return;
+      const documentIds = selectedRef.current;
+      const web = options.webSearch ?? webRef.current;
       const placeholderId = tempId();
       let convId = activeRef.current;
       const now = new Date().toISOString();
@@ -73,7 +107,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           verified: null,
           created_at: now,
           pending: true,
-          status: "Reading your documents",
+          status: web ? "Reading your documents" : "Reading the selected documents",
           question,
         },
       ]);
@@ -92,10 +126,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             if (!convId) {
               convId = event.id;
               activeRef.current = event.id;
+              settingsFor.current = event.id;
               setActiveId(event.id);
-              onCreated?.(event.id);
+              options.onCreated?.(event.id);
             }
-            touchConversation({ id: event.id, title: event.title, updated_at: new Date().toISOString() });
+            touchConversation({
+              id: event.id,
+              title: event.title,
+              document_ids: event.document_ids,
+              web_search: event.web_search,
+              updated_at: new Date().toISOString(),
+            });
             break;
           case "status":
             patch((m) => ({ ...m, status: event.text }));
@@ -115,7 +156,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   content: event.answer,
                   sources: event.sources,
                   verified: event.verified,
+                  outcome: event.outcome,
                   created_at: new Date().toISOString(),
+                  question,
                 };
                 return list.some((m) => m.id === placeholderId)
                   ? list.map((m) => (m.id === placeholderId ? final : m))
@@ -129,7 +172,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      streamChat({ question, conversation_id: convId }, onEvent, controller.signal)
+      streamChat(
+        { question, conversation_id: convId, document_ids: documentIds, web_search: web },
+        onEvent,
+        controller.signal,
+      )
         .catch((err: Error) => {
           if (err.name === "AbortError") patch((m) => ({ ...m, pending: false, stopped: true }));
           else patch((m) => ({ ...m, pending: false, error: err.message }));
@@ -146,8 +193,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => controllerRef.current?.abort(), []);
 
   const value = useMemo(
-    () => ({ activeId, messages, loading, loadError, streaming, open, send, stop }),
-    [activeId, messages, loading, loadError, streaming, open, send, stop],
+    () => ({
+      activeId,
+      messages,
+      loading,
+      loadError,
+      streaming,
+      selectedDocs,
+      webSearch,
+      setSelectedDocs,
+      setWebSearch,
+      open,
+      send,
+      stop,
+    }),
+    [activeId, messages, loading, loadError, streaming, selectedDocs, webSearch, open, send, stop],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
